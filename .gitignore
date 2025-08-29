@@ -1,4 +1,4 @@
-body_models/
-dataset/
-glove/
+body_models
+dataset
+glove
 output/
