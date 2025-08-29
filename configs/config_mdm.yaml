@@ -1,0 +1,20 @@
+hydra:
+  run:
+    dir: ./output/${now:%Y-%m-%d}/${now:%H-%M-%S}/train_mdm
+
+defaults:
+  - _self_
+  - trainer: mdm_trainer
+  - data: humanml_data
+
+seed: 42
+monitored_metric: loss
+dirpath: checkpoints/
+train: True
+test: False
+accelerator: gpu
+devices: [0]
+strategy: auto
+max_steps: 600000
+save_interval: 50000
+ckpt_path:

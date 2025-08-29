@@ -1,0 +1,26 @@
+data_module:
+  _target_: datamodules.humanml_datamodule.HumanMLDataModule
+
+  pred_len: 0
+  batch_size: 256
+  num_workers: 4
+
+dataset:
+  w_vectorizer:
+    meta_root: ./glove
+    prefix: our_vab
+
+  data_dir: ./dataset
+  max_len: 20
+  fixed_len: 0
+  max_motion_len: 196
+  min_motion_len: 40
+  max_text_len: 20
+  unit_len: 4
+  disable_offset_aug: False
+  dataset_name: t2m
+  use_cache: True
+  motion_dir: ./dataset/HumanML3D/new_joint_vecs
+  text_dir: ./dataset/HumanML3D/texts
+  mean: ./dataset/HumanML3D/Mean.npy
+  std: ./dataset/HumanML3D/Std.npy
