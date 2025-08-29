@@ -1,3 +1,12 @@
+<div align="center">
+
+# Motion Diffusion Model
+
+</div>
+
+Pytorch Lightning reimplementation of MDM.
+
+
 ## 🔨 Installation
 ```bash
 # Create a virtual environment

@@ -2,3 +2,5 @@ body_models
 dataset
 glove
 output/
+
+__pycache__/
