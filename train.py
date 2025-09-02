@@ -49,15 +49,18 @@ def main(cfg):
         callbacks=[checkpoint_callback],
         detect_anomaly=False,
         use_distributed_sampler=False,
+        log_every_n_steps=cfg.log_interval,
     )
 
     if cfg.train:
         trainer.fit(model, data_module)
         print(trainer.callback_metrics)
 
-    if cfg.test:
+    if cfg.generate:
         logging.basicConfig(level=logging.DEBUG)
-        trainer.test(model, data_module)
+        if cfg.ckpt_path is not None:
+            model = model.load_from_checkpoint(cfg.ckpt_path, cfg=cfg)
+        trainer.predict(model, data_module)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from copy import deepcopy
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 from omegaconf import DictConfig
@@ -9,6 +10,7 @@ from diffusion.gaussian_diffusion import GaussianDiffusion
 from diffusion.resample import LossAwareSampler, create_named_schedule_sampler
 from models.cfg_sampler import ClassifierFreeSampleModel
 from models.mdm import MDM
+from utils.logger import Logger
 
 
 class MDMTrainer(pl.LightningModule):
@@ -51,6 +53,9 @@ class MDMTrainer(pl.LightningModule):
         self.schedule_sampler = create_named_schedule_sampler(
             schedule_sampler_type, diffusion
         )
+        
+        # initialization
+        self.training_logger = Logger()
 
     def training_step(self, batch, batch_idx):
         motion, cond = batch
@@ -65,22 +70,24 @@ class MDMTrainer(pl.LightningModule):
             self.model,
             motion,  # [bs, njoints, nfeats, nframes]
             t,  # [bs](int) sampled denoising timesteps
-            model_kwargs=cond,
+            cond,
         )
 
         if isinstance(self.schedule_sampler, LossAwareSampler):
             self.schedule_sampler.update_with_local_losses(t, losses["loss"].detach())
 
         loss = (losses["loss"] * weights).mean()
-        outputs = {
-            "loss": loss,
-        }
         
-        self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"])
-        self.log_dict(outputs, prog_bar=True, logger=True, on_step=True, on_epoch=False)
+        # update training outputs
+        self.training_logger.update({"loss": loss.detach().cpu()})
         return loss
 
     def on_train_batch_end(self, outputs, batch, batch_idx):
+        # logging
+        self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"])
+        for k, v in self.training_logger.logs.items():
+            self.log(f"{k}", v, prog_bar=True, logger=True, on_step=True, on_epoch=False)
+        
         # update the average model using exponential moving average
         if self.use_ema:
             params = self.model.parameters()
@@ -92,15 +99,30 @@ class MDMTrainer(pl.LightningModule):
                     param.data, alpha=1 - self.avg_model_beta
                 )
                 
+    def test_step(self, batch, batch_idx):
+        motion, cond = batch
+        cond["y"] = {
+            key: val.to(self.device) if torch.is_tensor(val) else val
+            for key, val in cond["y"].items()
+        }
+        
+        # replicate motion and cond for multiple generations
+        motion = motion.repeat_interleave(self.num_replicate, dim=0)
+        cond = {key: val.repeat_interleave(self.num_replicate, dim=0) if torch.is_tensor(val) else val for key, val in cond.items()}
+
+        samples = self.diffusion.p_sample_loop(
+            self.model_for_eval,
+            (motion.shape[0], motion.shape[1], motion.shape[2], motion.shape[3]),
+            cond,
+            progress=True,
+        )
+                
     def on_save_checkpoint(self, checkpoint):
         # remove the model_for_eval from checkpoint to save space
         filtered_state_dict = {
             k: v for k, v in checkpoint["state_dict"].items() if "model_for_eval" not in k
         }
         checkpoint["state_dict"] = filtered_state_dict
-
-    def validation_step(self, batch, batch_idx):
-        return NotImplementedError
 
     def configure_optimizers(self):
         if self.optimizer.name == "adamw":

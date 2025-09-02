@@ -1034,7 +1034,7 @@ class GaussianDiffusion:
         model,
         x_start,
         t,
-        model_kwargs=None,
+        cond=None,
         noise=None,
     ):
         """
@@ -1043,7 +1043,7 @@ class GaussianDiffusion:
         :param model: the model to evaluate loss on.
         :param x_start: the [N x C x ...] tensor of inputs.
         :param t: a batch of timestep indices.
-        :param model_kwargs: if not None, a dict of extra keyword arguments to
+        :param cond: if not None, a dict of extra keyword arguments to
             pass to the model. This can be used for conditioning.
         :param noise: if specified, the specific Gaussian noise to try to remove.
         :return: a dict with the key "loss" containing a tensor of shape [N].
@@ -1051,7 +1051,7 @@ class GaussianDiffusion:
         """
 
         # enc = model.model._modules['module']
-        mask = model_kwargs["y"]["mask"]
+        mask = cond["y"]["mask"]
 
         if noise is None:
             noise = th.randn_like(x_start)
@@ -1066,12 +1066,12 @@ class GaussianDiffusion:
                 x_t=x_t,
                 t=t,
                 clip_denoised=False,
-                model_kwargs=model_kwargs,
+                model_kwargs=cond,
             )["output"]
             if self.loss_type == LossType.RESCALED_KL:
                 terms["loss"] *= self.num_timesteps
         elif self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
-            model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
+            model_output = model(x_t, self._scale_timesteps(t), **cond)
 
             if self.model_var_type in [
                 ModelVarType.LEARNED,

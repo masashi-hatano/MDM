@@ -1,7 +1,6 @@
 from typing import Optional
 
 import pytorch_lightning as pl
-from hydra.utils import instantiate
 from omegaconf.dictconfig import DictConfig
 from torch.utils.data import DataLoader
 
@@ -11,7 +10,7 @@ from datamodules.utils.collate_fn import (t2m_collate, t2m_eval_collate,
 
 
 def get_collate_fn(split: str = "train", pred_len: int = 0, batch_size: int = 32):
-    if split == "train":
+    if split in ["train", "predict"]:
         if pred_len > 0:
             return lambda x: t2m_prefix_collate(x, pred_len=pred_len)
         return lambda x: t2m_collate(x, batch_size)
@@ -37,14 +36,17 @@ class HumanMLDataModule(pl.LightningDataModule):
         return NotImplementedError
 
     def setup(self, stage: Optional[str] = None):
+        # Args:
+        #     stage: either ``'fit'``, ``'validate'``, ``'test'``, or ``'predict'``
         if stage == "fit" or stage is None:
             self.train_dataset = HumanMLDataset(split="train", **self.cfg)
             self.collate_fn_train = get_collate_fn(
                 split="train", pred_len=self.pred_len, batch_size=self.batch_size
             )
-        elif stage == "test":
-            self.test_dataset = HumanMLDataset(split="test", **self.cfg)
-            self.collate_fn_test = get_collate_fn(split="test")
+
+        elif stage == "predict":
+            self.predict_dataset = HumanMLDataset(split="test", **self.cfg)
+            self.collate_fn_predict = get_collate_fn(split="predict", pred_len=self.pred_len, batch_size=self.batch_size)
 
     def train_dataloader(self):
         return DataLoader(
@@ -55,13 +57,13 @@ class HumanMLDataModule(pl.LightningDataModule):
             shuffle=True,
             pin_memory=True,
         )
-
-    def test_dataloader(self):
+        
+    def predict_dataloader(self):
         return DataLoader(
-            self.test_dataset,
+            self.predict_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            collate_fn=self.collate_fn_test,
+            collate_fn=self.collate_fn_predict,
             shuffle=False,
             pin_memory=True,
         )
