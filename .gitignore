@@ -1,7 +1,10 @@
 body_models
 dataset
 glove
+t2m
 output/
+ADT
+pretrain
 
 __pycache__/
 .DS_Store

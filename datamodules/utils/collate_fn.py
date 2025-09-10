@@ -75,9 +75,14 @@ def collate(batch):
 
     if "key" in notnone_batches[0]:
         cond["y"].update({"db_key": [b["key"] for b in notnone_batches]})
+    
+    # post-training conditioning
+    if "start" in notnone_batches[0]:
+        cond["y"].update({"start": torch.as_tensor([b["start"] for b in notnone_batches], dtype=torch.float32)})
+    if "goal" in notnone_batches[0]:
+        cond["y"].update({"goal": torch.as_tensor([b["goal"] for b in notnone_batches], dtype=torch.float32)})
 
     return motion, cond
-
 
 # an adapter to our collate func
 def t2m_collate(batch, target_batch_size):
@@ -99,6 +104,26 @@ def t2m_collate(batch, target_batch_size):
     ]
     return collate(adapted_batch)
 
+def post_train_collate(batch, target_batch_size):
+    repeat_factor = -(-target_batch_size // len(batch))  # Ceiling division
+    repeated_batch = batch * repeat_factor
+    full_batch = repeated_batch[:target_batch_size]  # Truncate to the target batch size
+    # batch.sort(key=lambda x: x[3], reverse=True)
+    adapted_batch = [
+        {
+            "inp": torch.tensor(b[4].T)
+            .float()
+            .unsqueeze(1),  # [seqlen, J] -> [J, 1, seqlen]
+            # "text": b[2],  # b[0]['caption']
+            # "tokens": b[6],
+            "start": b[4][0], # first pose
+            "goal": b[4][-1], # last pose
+            "lengths": b[5],
+            "key": b[7] if len(b) > 7 else None,
+        }
+        for b in full_batch
+    ]
+    return collate(adapted_batch)
 
 def t2m_prefix_collate(batch, pred_len):
     # batch.sort(key=lambda x: x[3], reverse=True)

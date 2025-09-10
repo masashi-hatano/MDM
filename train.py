@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(config_path="configs", config_name="config_mdm.yaml")
+@hydra.main(config_path="configs", config_name="config_mdm_post-train.yaml")
 def main(cfg):
     # initialize random seeds
     torch.cuda.manual_seed_all(cfg.seed)

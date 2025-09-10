@@ -1,8 +1,11 @@
 from copy import deepcopy
+from pathlib import Path
+from typing import Optional, Union
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
+from hydra.utils import get_original_cwd
 from omegaconf import DictConfig
 from torch.optim import AdamW
 
@@ -23,11 +26,27 @@ class MDMTrainer(pl.LightningModule):
         avg_model_beta: float = 0.9999,
         gen_guidance_param: float = 1.0,
         schedule_sampler_type: str = "uniform",
+        ckpt_path: Union[str, None] = None,
     ):
         super(MDMTrainer, self).__init__()
+        self.root = get_original_cwd()
         self.model = model
         self.diffusion = diffusion
         self.optimizer = optimizer
+
+        if ckpt_path is not None:
+            p = torch.load(Path(self.root, ckpt_path))
+            od = p["model"]
+            model_dict = self.model.state_dict()
+            pretrained_dict = {}
+            for k,v in od.items():
+                if k not in model_dict:
+                    print(f"Skip loading parameter: {k}")
+                    continue
+                pretrained_dict[k] = v
+            model_dict.update(pretrained_dict)
+            self.model.load_state_dict(model_dict)
+            print(f"Model is initialized from {ckpt_path}")
 
         # EMA model
         self.use_ema = use_ema

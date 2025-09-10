@@ -1,0 +1,45 @@
+_target_: models.MDMTrainer.MDMTrainer
+
+model:
+  _target_: models.mdm.MDM
+  njoints: 263
+  nfeats: 1
+  latent_dim: 512
+  ff_size: 1024
+  num_layers: 8
+  num_heads: 4
+  dropout: 0.1
+  activation: gelu
+  clip_version: ViT-B/32
+  cond:
+    cond_mode: [start, goal]  # [no_cond, text, action]
+    cond_mask_prob: 0.1
+    mask_frames: False
+  embed:
+    emb_policy: add
+    pos_embed_max_len: 5000
+
+diffusion:
+  _target_: diffusion.respace.SpacedDiffusion
+  num_diffusion_timesteps: 1000
+  timestep_respacing: ""
+  beta:
+    schedule_name: cosine
+    scale_betas: 1.0
+  gaussian_diffusion:
+    model_mean_type: START_X
+    model_var_type: FIXED_SMALL
+    loss_type: MSE
+    rescale_timesteps: False
+
+optimizer:
+  name: adamw
+  lr: 1e-5
+  weight_decay: 0.
+  adam_betas: [0.9, 0.999]
+
+use_ema: True
+avg_model_beta: 0.9999
+gen_guidance_param: 2.5
+schedule_sampler_type: uniform
+ckpt_path: ./pretrain/model000600000.pt

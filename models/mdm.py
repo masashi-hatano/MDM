@@ -64,6 +64,14 @@ class MDM(nn.Module):
             if "action" in self.cond_mode:
                 print("EMBED ACTION")
                 self.embed_action = EmbedAction(self.num_actions, self.latent_dim)
+            
+            if "start" in self.cond_mode:
+                print("EMBED START")
+                self.embed_start = nn.Linear(self.input_feats, self.latent_dim)
+            
+            if "goal" in self.cond_mode:
+                print("EMBED GOAL")
+                self.embed_goal = nn.Linear(self.input_feats, self.latent_dim)
 
         # Transformer-based denoiser
         print("TRANS_ENC init")
@@ -176,6 +184,12 @@ class MDM(nn.Module):
         if "action" in self.cond_mode:
             action_emb = self.embed_action(y["action"])
             emb = time_emb + self.mask_cond(action_emb, force_mask=force_mask)
+            
+        if "start" in self.cond_mode and "goal" in self.cond_mode: 
+            start_emb = self.embed_start(y["start"]).unsqueeze(0)
+            goal_emb = self.embed_goal(y["goal"]).unsqueeze(0)
+            emb = time_emb + self.mask_cond(start_emb, force_mask=force_mask) + self.mask_cond(goal_emb, force_mask=force_mask)   
+        
         if self.cond_mode == "no_cond":
             # unconstrained
             emb = time_emb

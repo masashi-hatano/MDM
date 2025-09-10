@@ -14,7 +14,6 @@ from datamodules.utils.word_vectorizer import WordVectorizer
 class HumanMLDataset(torch.utils.data.Dataset):
     def __init__(
         self,
-        root: str = "",
         split: str = "train",
         data_dir: str = "dataset",
         motion_dir: str = "dataset/HumanML3D/new_joint_vecs",
@@ -171,6 +170,7 @@ class HumanMLDataset(torch.utils.data.Dataset):
                 "data_dict": data_dict,
             },
         )
+        return name_list, length_list, data_dict
 
     def reset_max_len(self, length):
         # if length is larger than max_motion_len, discard the larger motion_len samples
