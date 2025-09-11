@@ -188,8 +188,12 @@ class MDM(nn.Module):
         if "start" in self.cond_mode and "goal" in self.cond_mode: 
             start_emb = self.embed_start(y["start"]).unsqueeze(0)
             goal_emb = self.embed_goal(y["goal"]).unsqueeze(0)
-            emb = time_emb + self.mask_cond(start_emb, force_mask=force_mask) + self.mask_cond(goal_emb, force_mask=force_mask)   
-        
+
+            if self.emb_policy == "add":
+                emb = time_emb + self.mask_cond(start_emb, force_mask=force_mask) + self.mask_cond(goal_emb, force_mask=force_mask)
+            elif self.emb_policy == "cat":
+                emb = torch.cat([time_emb, self.mask_cond(start_emb, force_mask=force_mask), self.mask_cond(goal_emb, force_mask=force_mask)], dim=0)
+
         if self.cond_mode == "no_cond":
             # unconstrained
             emb = time_emb
@@ -211,7 +215,7 @@ class MDM(nn.Module):
         # adding the timestep embed
         xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
         xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
-        output = self.seqTransEncoder(xseq, src_key_padding_mask=frames_mask)[1:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
+        output = self.seqTransEncoder(xseq, src_key_padding_mask=frames_mask)[3:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
 
         output = self.output_process(output)  # [bs, njoints, nfeats, nframes]
         return output

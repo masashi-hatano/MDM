@@ -1,6 +1,6 @@
 hydra:
   run:
-    dir: ./output/${now:%Y-%m-%d}/${now:%H-%M-%S}/post-train_mdm_lr=1e-5_bs=64
+    dir: ./output/${now:%Y-%m-%d}/${now:%H-%M-%S}/post-train_mdm_cat_lr=1e-5_bs=64
 
 defaults:
   - _self_
@@ -14,7 +14,7 @@ test: False
 
 # Trainer settings
 accelerator: gpu
-devices: [0]
+devices: [1]
 strategy: auto
 max_steps: 600000
 save_interval: 10000

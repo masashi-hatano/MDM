@@ -16,7 +16,7 @@ model:
     cond_mask_prob: 0.1
     mask_frames: False
   embed:
-    emb_policy: add
+    emb_policy: cat
     pos_embed_max_len: 5000
 
 diffusion:
