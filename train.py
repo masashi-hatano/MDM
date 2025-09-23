@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import warnings
+from pathlib import Path
 
 import hydra
 import numpy as np
@@ -58,8 +59,6 @@ def main(cfg):
 
     if cfg.generate:
         logging.basicConfig(level=logging.DEBUG)
-        if cfg.ckpt_path is not None:
-            model = model.load_from_checkpoint(cfg.ckpt_path, cfg=cfg)
         trainer.predict(model, data_module)
 
 

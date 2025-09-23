@@ -1,4 +1,3 @@
-import json
 import random
 from pathlib import Path
 
@@ -8,12 +7,12 @@ from hydra.utils import get_original_cwd
 from tqdm import tqdm
 
 
-class ADTDataset(torch.utils.data.Dataset):
+class ParaHomeDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         split: str = "train",
-        data_dir: str = "dataset/ADT",
-        motion_dir: str = "dataset/ADT/new_joint_vecs",
+        data_dir: str = "dataset/ParaHome",
+        motion_dir: str = "dataset/ParaHome/new_joint_vecs",
         mean: str = "dataset/humanml/HumanML3D/Mean.npy",
         std: str = "dataset/humanml/HumanML3D/Std.npy",
         max_len: int = 20,
@@ -22,16 +21,16 @@ class ADTDataset(torch.utils.data.Dataset):
         min_motion_len: int = 60,
         unit_len: int = 4,
         disable_offset_aug: bool = False,
-        dataset_name: str = "adt",
+        dataset_name: str = "parahome",
         use_cache: bool = True,
     ):
-        super(ADTDataset, self).__init__()
+        super(ParaHomeDataset, self).__init__()
         # Initialize dataset paths
         root = get_original_cwd()
         self.split = split
+        assert self.split == "train", "Only train split is available for ParaHome dataset."
         self.data_dir = Path(root, data_dir)
         motion_dir = Path(root, motion_dir)
-        self.split_json_path = self.data_dir / Path("split.json")
         mean_path = Path(root, mean)
         std_path = Path(root, std)
 
@@ -76,14 +75,8 @@ class ADTDataset(torch.utils.data.Dataset):
         new_name_list = []
         length_list = []
 
-        split_json = json.load(open(self.split_json_path))[self.split]
-
         for motion_path in tqdm(motion_dir.glob("*.npy")):
             name = motion_path.stem
-            video_uid = motion_path.stem.split("_")[:-2]
-            video_uid = "_".join(video_uid)
-            if video_uid not in split_json:
-                continue
             try:
                 motion = np.load(motion_path)
                 if (len(motion)) < min_motion_len:

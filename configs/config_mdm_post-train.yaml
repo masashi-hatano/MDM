@@ -1,6 +1,6 @@
 hydra:
   run:
-    dir: ./output/${now:%Y-%m-%d}/${now:%H-%M-%S}/post-train_mdm_cat_lr=1e-5_bs=64
+    dir: ./output/start_goal_add_no_masking
 
 defaults:
   - _self_
@@ -10,13 +10,13 @@ defaults:
 seed: 42
 dirpath: checkpoints/
 train: True
-test: False
+generate: False
 
 # Trainer settings
 accelerator: gpu
 devices: [1]
 strategy: auto
-max_steps: 600000
-save_interval: 10000
+max_steps: 300000
+save_interval: 50000
 log_interval: 1000
-ckpt_path:
+ckpt_path: 

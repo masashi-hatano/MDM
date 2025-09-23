@@ -5,10 +5,13 @@ from typing import Optional, Union
 import numpy as np
 import pytorch_lightning as pl
 import torch
+import torch.nn as nn
+from einops import rearrange
 from hydra.utils import get_original_cwd
 from omegaconf import DictConfig
 from torch.optim import AdamW
 
+from datamodules.utils.recover import recover_from_ric
 from diffusion.gaussian_diffusion import GaussianDiffusion
 from diffusion.resample import LossAwareSampler, create_named_schedule_sampler
 from models.cfg_sampler import ClassifierFreeSampleModel
@@ -35,18 +38,30 @@ class MDMTrainer(pl.LightningModule):
         self.optimizer = optimizer
 
         if ckpt_path is not None:
-            p = torch.load(Path(self.root, ckpt_path))
-            od = p["model"]
-            model_dict = self.model.state_dict()
-            pretrained_dict = {}
-            for k,v in od.items():
-                if k not in model_dict:
-                    print(f"Skip loading parameter: {k}")
-                    continue
-                pretrained_dict[k] = v
-            model_dict.update(pretrained_dict)
-            self.model.load_state_dict(model_dict)
-            print(f"Model is initialized from {ckpt_path}")
+            if ckpt_path.endswith(".pt"):
+                p = torch.load(Path(self.root, ckpt_path), map_location="cpu")
+                print(p.keys())
+                od = p["model_avg"]
+                model_dict = self.model.state_dict()
+                pretrained_dict = {}
+                for k,v in od.items():
+                    if k not in model_dict:
+                        print(f"Skip loading parameter: {k}")
+                        continue
+                    pretrained_dict[k] = v
+                model_dict.update(pretrained_dict)
+                self.model.load_state_dict(model_dict)
+                print(f"Model is initialized from {ckpt_path}")
+            elif ckpt_path.endswith(".ckpt"):
+                p = torch.load(Path(self.root, ckpt_path), map_location="cpu", weights_only=False)
+                state_dict = p["state_dict"]
+                new_state_dict = {}
+                for k, v in state_dict.items():
+                    if k.startswith("model_avg."):
+                        new_k = k.replace("model_avg.", "")
+                        new_state_dict[new_k] = v
+                self.model.load_state_dict(new_state_dict, strict=False)
+                print(f"Model is initialized from {ckpt_path}")
 
         # EMA model
         self.use_ema = use_ema
@@ -55,6 +70,7 @@ class MDMTrainer(pl.LightningModule):
         if self.use_ema:
             self.model_avg = deepcopy(self.model)
         self.model_for_eval = self.model_avg if self.use_ema else self.model
+        self.gen_guidance_param = gen_guidance_param
         if gen_guidance_param != 1:
             self.model_for_eval = ClassifierFreeSampleModel(
                 self.model_for_eval
@@ -73,8 +89,13 @@ class MDMTrainer(pl.LightningModule):
             schedule_sampler_type, diffusion
         )
         
+        # loss
+        self.mse_loss = nn.MSELoss()
+        
         # initialization
         self.training_logger = Logger()
+        self.losses = []
+        self.save = False
 
     def training_step(self, batch, batch_idx):
         motion, cond = batch
@@ -118,6 +139,88 @@ class MDMTrainer(pl.LightningModule):
                     param.data, alpha=1 - self.avg_model_beta
                 )
                 
+    def predict_step(self, batch, batch_idx):
+        motions, cond = batch
+        
+        # Get text prompts and lengths
+        keys = cond['y']['db_key']
+        lengths = cond['y']['lengths'].cpu().numpy()
+
+        # Apply guidance scale if using classifier-free guidance
+        if self.gen_guidance_param != 1:
+            cond['y']['scale'] = torch.ones(motions.shape[0], device=motions.device) * self.gen_guidance_param
+            
+        # cond["y"]['uncond'] = True # ensure uncond is False for all samples
+
+        # Generate motions
+        sample = self.diffusion.p_sample_loop(
+            self.model_for_eval,
+            motions.shape,
+            clip_denoised=False,
+            model_kwargs=cond,
+            skip_timesteps=0,
+            init_image=None,
+            progress=True,
+            dump_steps=None,
+            noise=None,
+            const_noise=False,
+        )
+        
+        sample_np = sample.squeeze(-2).cpu().numpy()
+        motions_np = motions.squeeze(-2).cpu().numpy()
+
+        mse_loss = self.mse_loss(sample, motions)
+
+        mpjpe_list, mpjpe_start_list, mpjpe_goal_list = self.calc_mpjpe(motions_np, sample_np, lengths)
+
+        outputs = {
+            "mse_loss": mse_loss.item(),
+            "mpjpe": mpjpe_list,
+            "mpjpe_start": mpjpe_start_list,
+            "mpjpe_goal": mpjpe_goal_list
+        }
+
+        self.losses.append(outputs)
+
+        # Save each motion individually
+        if self.save == True:
+            for i in range(len(sample_np)):
+                # Get motion data: [n_frames, 263]
+                motion = sample_np[i]  # [263, n_frames]
+                length = lengths[i]
+                key = keys[i]
+                
+                motion = motion.transpose(1, 0)  # [n_frames, 263]
+                
+                # Trim motion to actual length (remove padding)
+                motion_trimmed = motion[:, :]
+                
+                motion_trimmed_denorm = self.trainer.predict_dataloaders.dataset.inv_transform(motion_trimmed)
+
+                # Save motion
+                save_path = Path(self.root, "predictions", "post-train_ca_300K", f"{key}.npy")
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                np.save(save_path, motion_trimmed_denorm)
+
+    def on_predict_end(self):
+        # Aggregate and log final metrics
+        if len(self.losses) == 0:
+            print("No predictions were made.")
+            return
+        
+        avg_mse_loss = np.mean([loss['mse_loss'] for loss in self.losses])
+        avg_mpjpe = np.mean([item for loss in self.losses for item in loss['mpjpe']])
+        avg_mpjpe_start = np.mean([item for loss in self.losses for item in loss['mpjpe_start']])
+        avg_mpjpe_goal = np.mean([item for loss in self.losses for item in loss['mpjpe_goal']])
+
+        print(f"Average MSE Loss over all predictions: {avg_mse_loss}")
+        print(f"Average MPJPE over all predictions: {avg_mpjpe}")
+        print(f"Average MPJPE at start frame: {avg_mpjpe_start}")
+        print(f"Average MPJPE at goal frame: {avg_mpjpe_goal}")
+        
+        # Clear losses for next prediction phase
+        self.losses = []
+
     def test_step(self, batch, batch_idx):
         motion, cond = batch
         cond["y"] = {
@@ -154,3 +257,51 @@ class MDMTrainer(pl.LightningModule):
         else:
             raise NotImplementedError(f"{self.optimizer.name} is not supported.")
         return [optimizer]
+    
+    def calc_mpjpe(self, gt, pred, lengths):
+        """Calculate MPJPE (Mean Per Joint Position Error) between ground truth and predicted motions.
+        Args:
+            gt: Ground truth motion, shape (B, C, T)
+            pred: Predicted motion, shape (B, C, T)
+            lengths: Lengths of each motion in the batch, shape (B,)
+        Returns:
+            mpjpe: Mean MPJPE over the entire sequence
+            mpjpe_start: MPJPE at the start frame
+            mpjpe_goal: MPJPE at the goal frame
+        """
+        # [bs, 263, n_frames] -> [bs, n_frames, 263] -> denormalize
+        b, c, f = gt.shape
+        gt = gt.transpose(0, 2, 1) # [bs, n_frames, 263]
+        pred = pred.transpose(0, 2, 1) # [bs, n_frames, 263]
+        gt = self.trainer.predict_dataloaders.dataset.inv_transform(gt)
+        pred = self.trainer.predict_dataloaders.dataset.inv_transform(pred)
+        
+        mpjpe_list = []
+        mpjpe_start_list = []
+        mpjpe_goal_list = []
+        
+        for i in range(b):
+            joints_gt = recover_from_ric(torch.tensor(gt[i], dtype=torch.float32)).numpy()  # [n_frames, 22, 3]
+            joints_pred = recover_from_ric(torch.tensor(pred[i], dtype=torch.float32)).numpy()  # [n_frames, 22, 3]
+            
+            joints_gt_i = joints_gt[:lengths[i]]
+            joints_pred_i = joints_pred[:lengths[i]]
+            mpjpe = np.linalg.norm(joints_gt_i - joints_pred_i, axis=-1).mean()
+            mpjpe_start = np.linalg.norm(joints_gt_i[0:1] - joints_pred_i[0:1], axis=-1).mean()
+            mpjpe_goal = np.linalg.norm(joints_gt_i[-2:-1] - joints_pred_i[-2:-1], axis=-1).mean()
+            mpjpe_list.append(mpjpe)
+            mpjpe_start_list.append(mpjpe_start)
+            mpjpe_goal_list.append(mpjpe_goal)
+        return mpjpe_list, mpjpe_start_list, mpjpe_goal_list
+
+    def calc_jpe(self, gt, pred, mask):
+        # pred: B X T X 22 X 3 or T X 22 X 3
+        # gt: B X T X 22 X 3 or T X 22 X 3
+        # mask: B X T or T
+        diff = pred - gt
+        diff = diff**2
+        diff = diff.sum(axis=-1)
+        diff = diff**0.5
+        jpe = diff * mask
+        jpe = jpe[jpe != 0]
+        return jpe

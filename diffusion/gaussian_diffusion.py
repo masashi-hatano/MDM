@@ -135,8 +135,8 @@ class GaussianDiffusion:
         
         if model_mean_type == "START_X":
             self.model_mean_type = ModelMeanType.START_X
-        if model_mean_type == "FIXED_SMALL":
-            self.model_mean_type = ModelMeanType.FIXED_SMALL
+        if model_var_type == "FIXED_SMALL":
+            self.model_var_type = ModelVarType.FIXED_SMALL
         if loss_type == "MSE":
             self.loss_type = LossType.MSE
 

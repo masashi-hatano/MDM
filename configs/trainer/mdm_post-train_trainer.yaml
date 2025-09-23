@@ -16,7 +16,7 @@ model:
     cond_mask_prob: 0.1
     mask_frames: False
   embed:
-    emb_policy: cat
+    emb_policy: add  # [add, cat, ca]
     pos_embed_max_len: 5000
 
 diffusion:
@@ -34,12 +34,12 @@ diffusion:
 
 optimizer:
   name: adamw
-  lr: 1e-5
+  lr: 1e-4
   weight_decay: 0.
   adam_betas: [0.9, 0.999]
 
 use_ema: True
 avg_model_beta: 0.9999
-gen_guidance_param: 2.5
+gen_guidance_param: 1
 schedule_sampler_type: uniform
-ckpt_path: ./pretrain/model000600000.pt
+ckpt_path: ./pretrain/nymeria/model000800000.pt # /home/mahatano/workspace/mdm/output/lr=1e-4_cross-attention_latest_nymeria_pretrain/checkpoints/model_step=000300000.ckpt # ./pretrain/nymeria/model000800000.pt

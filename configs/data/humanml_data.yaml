@@ -24,5 +24,5 @@ dataset:
   text_dir: ./dataset/HumanML3D/texts
   mean: ./dataset/HumanML3D/Mean.npy
   std: ./dataset/HumanML3D/Std.npy
-  mean_for_eval: ./dataset/t2m_mean.npy
-  std_for_eval: ./dataset/t2m_std.npy
+  # mean_for_eval: ./dataset/t2m_mean.npy
+  # std_for_eval: ./dataset/t2m_std.npy

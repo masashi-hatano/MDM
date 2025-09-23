@@ -117,7 +117,7 @@ def post_train_collate(batch, target_batch_size):
             # "text": b[2],  # b[0]['caption']
             # "tokens": b[6],
             "start": b[4][0], # first pose
-            "goal": b[4][-1], # last pose
+            "goal": b[4][b[5]-1], # last valid pose
             "lengths": b[5],
             "key": b[7] if len(b) > 7 else None,
         }

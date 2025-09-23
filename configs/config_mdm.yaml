@@ -1,7 +1,7 @@
 hydra:
   run:
     # dir: ./output/${now:%Y-%m-%d}/${now:%H-%M-%S}/train_mdm_log_mean
-    dir: ./output/generation/
+    dir: ./output/debug/
 
 defaults:
   - _self_

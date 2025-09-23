@@ -15,11 +15,11 @@ class HumanMLDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         split: str = "train",
-        data_dir: str = "dataset",
-        motion_dir: str = "dataset/HumanML3D/new_joint_vecs",
-        text_dir: str = "dataset/HumanML3D/texts",
-        mean: str = "dataset/HumanML3D/Mean.npy",
-        std: str = "dataset/HumanML3D/Std.npy",
+        data_dir: str = "dataset/humanml",
+        motion_dir: str = "dataset/humanml/HumanML3D/new_joint_vecs",
+        text_dir: str = "dataset/humanml/HumanML3D/texts",
+        mean: str = "dataset/humanml/HumanML3D/Mean.npy",
+        std: str = "dataset/humanml/HumanML3D/Std.npy",
         w_vectorizer: Optional[DictConfig] = None,
         max_len: int = 20,
         fixed_len: int = 0,
@@ -258,4 +258,5 @@ class HumanMLDataset(torch.utils.data.Dataset):
             motion,
             length,
             "_".join(tokens),
+            key
         )

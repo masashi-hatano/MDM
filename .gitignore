@@ -5,6 +5,7 @@ t2m
 output/
 ADT
 pretrain
+predictions
 
 __pycache__/
 .DS_Store
