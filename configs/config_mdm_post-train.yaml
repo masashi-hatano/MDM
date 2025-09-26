@@ -1,11 +1,11 @@
 hydra:
   run:
-    dir: ./output/start_goal_add_no_masking
+    dir: ./output/nymeria_trans_dec_512_bert_50steps_start+goal_ca_text_MoGaze
 
 defaults:
   - _self_
   - trainer: mdm_post-train_trainer
-  - data: adt_data
+  - data: mogaze_data
 
 seed: 42
 dirpath: checkpoints/

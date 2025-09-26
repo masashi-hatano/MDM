@@ -28,7 +28,9 @@ class ParaHomeDataset(torch.utils.data.Dataset):
         # Initialize dataset paths
         root = get_original_cwd()
         self.split = split
-        assert self.split == "train", "Only train split is available for ParaHome dataset."
+        assert (
+            self.split == "train"
+        ), "Only train split is available for ParaHome dataset."
         self.data_dir = Path(root, data_dir)
         motion_dir = Path(root, motion_dir)
         mean_path = Path(root, mean)
@@ -90,7 +92,7 @@ class ParaHomeDataset(torch.utils.data.Dataset):
                 length_list.append(len(motion))
             except:
                 pass
-        
+
         name_list, length_list = zip(
             *sorted(zip(new_name_list, length_list), key=lambda x: x[1])
         )
@@ -161,12 +163,12 @@ class ParaHomeDataset(torch.utils.data.Dataset):
         length = (original_length, m_length) if self.fixed_len > 0 else m_length
 
         return (
-            None, # word embeddings
-            None, # pos one hots
-            None, # caption
-            None, # sentence length
+            None,  # word embeddings
+            None,  # pos one hots
+            None,  # caption
+            None,  # sentence length
             motion,
             length,
-            None, # tokens
-            key, # name
+            None,  # tokens
+            key,  # name
         )

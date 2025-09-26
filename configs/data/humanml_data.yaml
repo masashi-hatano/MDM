@@ -10,7 +10,7 @@ dataset:
     meta_root: ./glove
     prefix: our_vab
 
-  data_dir: ./dataset
+  data_dir: ./dataset/humanml
   max_len: 20
   fixed_len: 0
   max_motion_len: 196
@@ -20,9 +20,11 @@ dataset:
   disable_offset_aug: False
   dataset_name: t2m
   use_cache: True
-  motion_dir: ./dataset/HumanML3D/new_joint_vecs
-  text_dir: ./dataset/HumanML3D/texts
-  mean: ./dataset/HumanML3D/Mean.npy
-  std: ./dataset/HumanML3D/Std.npy
+  motion_dir: ./dataset/humanml/HumanML3D/new_joint_vecs
+  text_dir: ./dataset/humanml/HumanML3D/texts
+  mean: ./dataset/humanml/HumanML3D/Mean.npy
+  std: ./dataset/humanml/HumanML3D/Std.npy
+  # mean: ./pretrain/nymeria/Mean.npy
+  # std: ./pretrain/nymeria/Std.npy
   # mean_for_eval: ./dataset/t2m_mean.npy
   # std_for_eval: ./dataset/t2m_std.npy

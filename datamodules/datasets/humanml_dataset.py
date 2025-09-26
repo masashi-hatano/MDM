@@ -80,6 +80,7 @@ class HumanMLDataset(torch.utils.data.Dataset):
         self.data_dict = data_dict
         self.name_list = name_list
         self.reset_max_len(self.max_len)
+        print(f"Dataset {split} size: {len(self.data_dict)}")
 
     def create_cache(self, motion_dir, text_dir, cache_path, min_motion_len):
         data_dict = {}
@@ -193,6 +194,9 @@ class HumanMLDataset(torch.utils.data.Dataset):
         # Randomly select a caption
         text_data = random.choice(text_list)
         caption, tokens = text_data["caption"], text_data["tokens"]
+        
+        # caption = "C walks towards the hallway then bends her right arm and gestures her right hand as she continues to talk with her peer." # DEBUG
+        # caption = "C moves to pick object." # DEBUG
 
         if len(tokens) < self.max_text_len:
             # pad with "unk"
@@ -258,5 +262,5 @@ class HumanMLDataset(torch.utils.data.Dataset):
             motion,
             length,
             "_".join(tokens),
-            key
+            key,
         )

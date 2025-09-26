@@ -7,9 +7,13 @@ from torch.utils.data import DataLoader
 
 from datamodules.datasets.mogaze_dataset import MoGazeDataset
 from datamodules.datasets.parahome_dataset import ParaHomeDataset
-from datamodules.utils.collate_fn import (collate, post_train_collate,
-                                          t2m_collate, t2m_eval_collate,
-                                          t2m_prefix_collate)
+from datamodules.utils.collate_fn import (
+    collate,
+    post_train_collate,
+    t2m_collate,
+    t2m_eval_collate,
+    t2m_prefix_collate,
+)
 
 
 def get_collate_fn(split: str = "train", pred_len: int = 0, batch_size: int = 32):
@@ -55,7 +59,9 @@ class MoGazeDataModule(pl.LightningDataModule):
 
         elif stage == "predict":
             self.predict_dataset = MoGazeDataset(split="val", **self.cfg)
-            self.collate_fn_predict = get_collate_fn(split="predict", pred_len=self.pred_len, batch_size=self.batch_size)
+            self.collate_fn_predict = get_collate_fn(
+                split="predict", pred_len=self.pred_len, batch_size=self.batch_size
+            )
 
     def train_dataloader(self):
         return DataLoader(
@@ -66,7 +72,7 @@ class MoGazeDataModule(pl.LightningDataModule):
             shuffle=True,
             pin_memory=True,
         )
-        
+
     def predict_dataloader(self):
         return DataLoader(
             self.predict_dataset,

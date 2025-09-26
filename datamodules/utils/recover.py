@@ -14,7 +14,7 @@ from datamodules.utils.quaternion import qinv, qrot, quaternion_to_cont6d
 def recover_root_rot_pos(data):
     rot_vel = data[..., 0]
     r_rot_ang = torch.zeros_like(rot_vel).to(data.device)
-    '''Get Y-axis rotation from rotation velocity'''
+    """Get Y-axis rotation from rotation velocity"""
     r_rot_ang[..., 1:] = rot_vel[..., :-1]
     r_rot_ang = torch.cumsum(r_rot_ang, dim=-1)
 
@@ -24,7 +24,7 @@ def recover_root_rot_pos(data):
 
     r_pos = torch.zeros(data.shape[:-1] + (3,)).to(data.device)
     r_pos[..., 1:, [0, 2]] = data[..., :-1, 1:3]
-    '''Add Y-axis rotation to root position'''
+    """Add Y-axis rotation to root position"""
     r_pos = qrot(qinv(r_rot_quat), r_pos)
 
     r_pos = torch.cumsum(r_pos, dim=-2)
@@ -52,17 +52,19 @@ def recover_from_rot(data, joints_num, skeleton):
 
 def recover_from_ric(data, joints_num=22):
     r_rot_quat, r_pos = recover_root_rot_pos(data)
-    positions = data[..., 4:(joints_num - 1) * 3 + 4]
+    positions = data[..., 4 : (joints_num - 1) * 3 + 4]
     positions = positions.view(positions.shape[:-1] + (-1, 3))
 
-    '''Add Y-axis rotation to local joints'''
-    positions = qrot(qinv(r_rot_quat[..., None, :]).expand(positions.shape[:-1] + (4,)), positions)
+    """Add Y-axis rotation to local joints"""
+    positions = qrot(
+        qinv(r_rot_quat[..., None, :]).expand(positions.shape[:-1] + (4,)), positions
+    )
 
-    '''Add root XZ to joints'''
+    """Add root XZ to joints"""
     positions[..., 0] += r_pos[..., 0:1]
     positions[..., 2] += r_pos[..., 2:3]
 
-    '''Concate root and joints'''
+    """Concate root and joints"""
     positions = torch.cat([r_pos.unsqueeze(-2), positions], dim=-2)
 
     return positions

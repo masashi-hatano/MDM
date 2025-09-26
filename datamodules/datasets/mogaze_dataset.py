@@ -14,6 +14,7 @@ class MoGazeDataset(torch.utils.data.Dataset):
         split: str = "train",
         data_dir: str = "dataset/MoGaze",
         motion_dir: str = "dataset/MoGaze/new_joint_vecs",
+        text_dir: str = "dataset/MoGaze/texts",
         mean: str = "dataset/humanml/HumanML3D/Mean.npy",
         std: str = "dataset/humanml/HumanML3D/Std.npy",
         max_len: int = 20,
@@ -32,6 +33,7 @@ class MoGazeDataset(torch.utils.data.Dataset):
         self.data_dir = Path(root, data_dir)
         motion_dir = Path(root, motion_dir)
         self.split_json_path = self.data_dir / Path("split.json")
+        text_dir = Path(root, text_dir)
         mean_path = Path(root, mean)
         std_path = Path(root, std)
 
@@ -59,6 +61,7 @@ class MoGazeDataset(torch.utils.data.Dataset):
         else:
             name_list, length_list, data_dict = self.create_cache(
                 motion_dir=motion_dir,
+                text_dir=text_dir,
                 cache_path=cache_path,
                 min_motion_len=min_motion_len,
             )
@@ -71,7 +74,7 @@ class MoGazeDataset(torch.utils.data.Dataset):
         self.reset_max_len(self.max_len)
         print(f"Dataset {split} size: {len(self.data_dict)}")
 
-    def create_cache(self, motion_dir, cache_path, min_motion_len):
+    def create_cache(self, motion_dir, text_dir, cache_path, min_motion_len):
         data_dict = {}
         new_name_list = []
         length_list = []
@@ -84,6 +87,15 @@ class MoGazeDataset(torch.utils.data.Dataset):
             video_uid = "_".join(video_uid)
             if video_uid not in split_json:
                 continue
+            text_data = []
+            with open(Path(text_dir, name + ".txt")) as f:
+                for line in f.readlines():
+                    text_dict = {}
+                    line_split = line.strip()
+                    caption = line_split
+
+                    text_dict["caption"] = caption
+                    text_data.append(text_dict)
             try:
                 motion = np.load(motion_path)
                 if (len(motion)) < min_motion_len:
@@ -92,12 +104,13 @@ class MoGazeDataset(torch.utils.data.Dataset):
                 data_dict[name] = {
                     "motion": motion,
                     "length": len(motion),
+                    "text": text_data,
                 }
                 new_name_list.append(name)
                 length_list.append(len(motion))
             except:
                 pass
-        
+
         name_list, length_list = zip(
             *sorted(zip(new_name_list, length_list), key=lambda x: x[1])
         )
@@ -129,7 +142,11 @@ class MoGazeDataset(torch.utils.data.Dataset):
         idx = self.pointer + item
         key = self.name_list[idx]
         data = self.data_dict[key]
-        motion, m_length = data["motion"], data["length"]
+        motion, m_length, text_list = data["motion"], data["length"], data["text"]
+
+        # only one caption per motion
+        text_dict = text_list[0]
+        caption = text_dict["caption"]
 
         # Crop the motions in to times of 4, and introduce small variations
         if self.unit_len < 10:
@@ -168,12 +185,12 @@ class MoGazeDataset(torch.utils.data.Dataset):
         length = (original_length, m_length) if self.fixed_len > 0 else m_length
 
         return (
-            None, # word embeddings
-            None, # pos one hots
-            None, # caption
-            None, # sentence length
+            None,  # word embeddings
+            None,  # pos one hots
+            caption,  # caption
+            None,  # sentence length
             motion,
             length,
-            None, # tokens
-            key, # name
+            None,  # tokens
+            key,  # name
         )

@@ -14,8 +14,7 @@ import numpy as np
 import torch as th
 
 from diffusion.utils.loss_util import masked_l2
-from diffusion.utils.losses import (discretized_gaussian_log_likelihood,
-                                    normal_kl)
+from diffusion.utils.losses import discretized_gaussian_log_likelihood, normal_kl
 from diffusion.utils.nn import mean_flat
 
 
@@ -132,7 +131,7 @@ class GaussianDiffusion:
         self.model_var_type = model_var_type
         self.loss_type = loss_type
         self.rescale_timesteps = rescale_timesteps
-        
+
         if model_mean_type == "START_X":
             self.model_mean_type = ModelMeanType.START_X
         if model_var_type == "FIXED_SMALL":

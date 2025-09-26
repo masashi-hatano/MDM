@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from omegaconf import DictConfig
 
+from models.BERT.BERT_encoder import load_bert
 from models.utils.rotation2xyz import Rotation2xyz
 
 
@@ -23,6 +24,10 @@ class MDM(nn.Module):
         activation: str = "gelu",
         dataset: str = "amass",
         clip_version: str = None,
+        clip_dim: int = 512,
+        text_encoder_type: str = "bert",  # clip, bert
+        arch: str = "trans_dec",  # trans_enc, trans_dec
+        emb_trans_dec: bool = False,
         cond: Optional[DictConfig] = None,
         embed: Optional[DictConfig] = None,
     ):
@@ -33,6 +38,10 @@ class MDM(nn.Module):
         self.num_actions = num_actions
         self.latent_dim = latent_dim
         self.input_feats = self.njoints * self.nfeats
+        self.clip_dim = clip_dim
+        self.text_encoder_type = text_encoder_type
+        self.arch = arch
+        self.emb_trans_dec = emb_trans_dec
 
         # Conditioning settings
         self.cond_mode = cond.cond_mode
@@ -44,7 +53,7 @@ class MDM(nn.Module):
         # Embedding for denoising timestep
         self.emb_policy = embed.emb_policy
         self.sequence_pos_encoder = PositionalEncoding(
-            self.latent_dim, max_len=embed.pos_embed_max_len
+            self.latent_dim, dropout, max_len=embed.pos_embed_max_len
         )
         self.embed_timestep = TimestepEmbedder(
             self.latent_dim, self.sequence_pos_encoder
@@ -55,24 +64,42 @@ class MDM(nn.Module):
             if "text" in self.cond_mode:
                 # We support CLIP encoder and DistilBERT
                 print("EMBED TEXT")
-                print("Loading CLIP...")
-                self.clip_model = self.load_and_freeze_clip(clip_version)
-                self.encode_text = self.clip_encode_text
-                self.clip_dim = 512
+
+                if self.text_encoder_type == "clip":
+                    print("Loading CLIP...")
+                    self.clip_version = clip_version
+                    self.clip_model = self.load_and_freeze_clip(clip_version)
+                    self.encode_text = self.clip_encode_text
+                elif self.text_encoder_type == "bert":
+                    # assert self.arch == 'trans_dec'
+                    # assert self.emb_trans_dec == False # passing just the time embed so it's fine
+                    print("Loading BERT...")
+                    # bert_model_path = 'model/BERT/distilbert-base-uncased'
+                    bert_model_path = "distilbert/distilbert-base-uncased"
+                    self.clip_model = load_bert(
+                        bert_model_path
+                    )  # Sorry for that, the naming is for backward compatibility
+                    self.encode_text = self.bert_encode_text
+                    self.clip_dim = 768
+                else:
+                    raise ValueError("We only support [CLIP, BERT] text encoders")
+
                 self.embed_text = nn.Linear(self.clip_dim, self.latent_dim)
 
             if "action" in self.cond_mode:
                 print("EMBED ACTION")
                 self.embed_action = EmbedAction(self.num_actions, self.latent_dim)
-            
+
             if "start" and "goal" in self.cond_mode:
                 print("EMBED START and GOAL")
                 self.embed_start = nn.Linear(self.input_feats, self.latent_dim)
                 self.embed_goal = nn.Linear(self.input_feats, self.latent_dim)
-                self.embed_start_goal = nn.Linear(self.input_feats*2, self.latent_dim)
+                self.embed_start_goal = nn.Linear(self.input_feats * 2, self.latent_dim)
 
             if self.emb_policy == "ca":
-                assert "start" in self.cond_mode and "goal" in self.cond_mode, "CA policy requires both start and goal conditions"
+                assert (
+                    "start" in self.cond_mode and "goal" in self.cond_mode
+                ), "CA policy requires both start and goal conditions"
                 print("EMBED Cross-Attention")
                 self.embed_ca = nn.TransformerDecoderLayer(
                     d_model=self.latent_dim,
@@ -81,21 +108,37 @@ class MDM(nn.Module):
                     dropout=dropout,
                     activation=activation,
                 )
-                
 
         # Transformer-based denoiser
-        print("TRANS_ENC init")
-        seqTransEncoderLayer = nn.TransformerEncoderLayer(
-            d_model=self.latent_dim,
-            nhead=num_heads,
-            dim_feedforward=ff_size,
-            dropout=dropout,
-            activation=activation,
-        )
+        if self.arch == "trans_enc":
+            print("TRANS_ENC init")
+            seqTransEncoderLayer = nn.TransformerEncoderLayer(
+                d_model=self.latent_dim,
+                nhead=num_heads,
+                dim_feedforward=ff_size,
+                dropout=dropout,
+                activation=activation,
+            )
 
-        self.seqTransEncoder = nn.TransformerEncoder(
-            seqTransEncoderLayer, num_layers=num_layers
-        )
+            self.seqTransEncoder = nn.TransformerEncoder(
+                seqTransEncoderLayer, num_layers=num_layers
+            )
+        elif self.arch == "trans_dec":
+            print("TRANS_DEC init")
+            seqTransDecoderLayer = nn.TransformerDecoderLayer(
+                d_model=self.latent_dim,
+                nhead=num_heads,
+                dim_feedforward=ff_size,
+                dropout=dropout,
+                activation=activation,
+            )
+            self.seqTransDecoder = nn.TransformerDecoder(
+                seqTransDecoderLayer, num_layers=num_layers
+            )
+        else:
+            raise ValueError(
+                "Please choose correct architecture [trans_enc, trans_dec]"
+            )
 
         self.output_process = OutputProcess(
             self.input_feats, self.latent_dim, self.njoints, self.nfeats
@@ -124,7 +167,7 @@ class MDM(nn.Module):
             p.requires_grad = False
 
         return clip_model
-    
+
     def get_mask(self, cond, force_mask=False):
         bs = cond.shape[-2]
         if force_mask:
@@ -132,7 +175,9 @@ class MDM(nn.Module):
         elif self.training and self.cond_mask_prob > 0.0:
             mask = torch.bernoulli(
                 torch.ones(bs, device=cond.device) * self.cond_mask_prob
-            ).to(torch.bool)  # 1-> use null_cond, 0-> use real cond
+            ).to(
+                torch.bool
+            )  # 1-> use null_cond, 0-> use real cond
             return mask
         else:
             return torch.zeros(bs, dtype=torch.bool, device=cond.device)
@@ -173,13 +218,26 @@ class MDM(nn.Module):
         # print('texts after pad', texts.shape, texts)
         return self.clip_model.encode_text(texts).float().unsqueeze(0)
 
+    def bert_encode_text(self, raw_text):
+        # enc_text = self.clip_model(raw_text)
+        # enc_text = enc_text.permute(1, 0, 2)
+        # return enc_text
+        enc_text, mask = self.clip_model(
+            raw_text
+        )  # self.clip_model.get_last_hidden_state(raw_text, return_mask=True)  # mask: False means no token there
+        enc_text = enc_text.permute(1, 0, 2)
+        mask = (
+            ~mask
+        )  # mask: True means no token there, we invert since the meaning of mask for transformer is inverted  https://pytorch.org/docs/stable/generated/torch.nn.MultiheadAttention.html
+        return enc_text, mask
+
     def forward(self, x, timesteps, y=None):
         """
         x: [batch_size, njoints, nfeats, max_frames], denoted x_t in the paper
         timesteps: [batch_size] (int)
         """
         bs, njoints, nfeats, nframes = x.shape
-        time_emb = self.embed_timestep(timesteps)  # [1, bs, d]
+        emb = self.embed_timestep(timesteps)  # [1, bs, d]
 
         force_mask = y.get("uncond", False)
         if "text" in self.cond_mode:
@@ -196,34 +254,32 @@ class MDM(nn.Module):
             text_emb = self.embed_text(
                 self.mask_cond(enc_text, force_mask=force_mask)
             )  # casting mask for the single-prompt-for-all case
-            if self.emb_policy == "add":
-                emb = text_emb + time_emb
+            if self.emb_policy == "add" or self.emb_policy == "ca":
+                emb = emb + text_emb
             else:
-                emb = torch.cat([time_emb, text_emb], dim=0)
+                emb = torch.cat([emb, text_emb], dim=0)
                 text_mask = torch.cat(
                     [torch.zeros_like(text_mask[:, 0:1]), text_mask], dim=1
                 )
         if "action" in self.cond_mode:
             action_emb = self.embed_action(y["action"])
-            emb = time_emb + self.mask_cond(action_emb, force_mask=force_mask)
-            
-        if "start" in self.cond_mode and "goal" in self.cond_mode: 
+            emb = emb + self.mask_cond(action_emb, force_mask=force_mask)
+
+        if "start" in self.cond_mode and "goal" in self.cond_mode:
             start_emb = self.embed_start(y["start"]).unsqueeze(0)
             goal_emb = self.embed_goal(y["goal"]).unsqueeze(0)
-            start_goal = torch.cat([y["start"], y["goal"]], dim=-1)  # [bs, input_feats*2]
+            start_goal = torch.cat(
+                [y["start"], y["goal"]], dim=-1
+            )  # [bs, input_feats*2]
             start_goal_emb = self.embed_start_goal(start_goal).unsqueeze(0)  # [1, bs, d]
 
             if self.emb_policy == "add":
-                emb = time_emb + start_emb + goal_emb
+                emb = emb + start_emb + goal_emb
             # elif self.emb_policy == "cat":
             #     emb = torch.cat([time_emb, self.mask_cond(start_emb, force_mask=force_mask), self.mask_cond(goal_emb, force_mask=force_mask)], dim=0)
             elif self.emb_policy == "ca":
                 memory = start_goal_emb
-                emb = time_emb + self.embed_ca(time_emb, memory)
-
-        if self.cond_mode == "no_cond":
-            # unconstrained
-            emb = time_emb
+                emb = emb + self.embed_ca(emb, memory)
 
         x = self.input_process(x)
 
@@ -236,14 +292,43 @@ class MDM(nn.Module):
             frames_mask = torch.logical_not(
                 y["mask"][..., : x.shape[0]].squeeze(1).squeeze(1)
             ).to(device=x.device)
-            step_mask = torch.zeros((bs, 1), dtype=torch.bool, device=x.device)
-            frames_mask = torch.cat([step_mask, frames_mask], dim=1)
+            if self.emb_trans_dec or self.arch == "trans_enc":
+                step_mask = torch.zeros((bs, 1), dtype=torch.bool, device=x.device)
+                frames_mask = torch.cat([step_mask, frames_mask], dim=1)
 
         # adding the timestep embed
-        num_tokens_cond = emb.shape[0]
-        xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
-        xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
-        output = self.seqTransEncoder(xseq, src_key_padding_mask=frames_mask)[num_tokens_cond:]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
+        if self.arch == "trans_enc":
+            # adding the timestep embed
+            num_tokens_cond = emb.shape[0]
+            xseq = torch.cat((emb, x), axis=0)  # [seqlen+1, bs, d]
+            xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
+            output = self.seqTransEncoder(xseq, src_key_padding_mask=frames_mask)[
+                num_tokens_cond:
+            ]  # , src_key_padding_mask=~maskseq)  # [seqlen, bs, d]
+
+        elif self.arch == "trans_dec":
+            if self.emb_trans_dec:
+                xseq = torch.cat((emb, x), axis=0)
+            else:
+                xseq = x
+            xseq = self.sequence_pos_encoder(xseq)  # [seqlen+1, bs, d]
+
+            if self.text_encoder_type == "clip":
+                output = self.seqTransDecoder(
+                    tgt=xseq, memory=emb, tgt_key_padding_mask=frames_mask
+                )
+            elif self.text_encoder_type == "bert":
+                output = self.seqTransDecoder(
+                    tgt=xseq,
+                    memory=emb,
+                    memory_key_padding_mask=text_mask,
+                    tgt_key_padding_mask=frames_mask,
+                )  # Rotem's bug fix
+            else:
+                raise ValueError()
+            
+            if self.emb_trans_dec:
+                output = output[1:]
 
         output = self.output_process(output)  # [bs, njoints, nfeats, nframes]
         return output
@@ -258,8 +343,9 @@ class MDM(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=5000):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
         super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
 
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
@@ -273,8 +359,9 @@ class PositionalEncoding(nn.Module):
         self.register_buffer("pe", pe)
 
     def forward(self, x):
+        # not used in the final model
         x = x + self.pe[: x.size(0), :]
-        return x
+        return self.dropout(x)
 
 
 class TimestepEmbedder(nn.Module):

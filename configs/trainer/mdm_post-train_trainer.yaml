@@ -11,17 +11,21 @@ model:
   dropout: 0.1
   activation: gelu
   clip_version: ViT-B/32
+  clip_dim: 768  # 512 for clip, 768 for bert
+  text_encoder_type: bert  # clip, bert
+  arch: trans_dec  # trans_enc, trans_dec
+  emb_trans_dec: False
   cond:
-    cond_mode: [start, goal]  # [no_cond, text, action]
+    cond_mode: [text, start, goal]  # [no_cond, text, action, start, goal]
     cond_mask_prob: 0.1
     mask_frames: False
   embed:
-    emb_policy: add  # [add, cat, ca]
+    emb_policy: ca # [add, cat, ca]
     pos_embed_max_len: 5000
 
 diffusion:
   _target_: diffusion.respace.SpacedDiffusion
-  num_diffusion_timesteps: 1000
+  num_diffusion_timesteps: 50
   timestep_respacing: ""
   beta:
     schedule_name: cosine
@@ -40,6 +44,6 @@ optimizer:
 
 use_ema: True
 avg_model_beta: 0.9999
-gen_guidance_param: 1
+gen_guidance_param: 2.5
 schedule_sampler_type: uniform
 ckpt_path: ./pretrain/nymeria/model000800000.pt # /home/mahatano/workspace/mdm/output/lr=1e-4_cross-attention_latest_nymeria_pretrain/checkpoints/model_step=000300000.ckpt # ./pretrain/nymeria/model000800000.pt

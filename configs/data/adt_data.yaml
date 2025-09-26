@@ -14,7 +14,10 @@ dataset:
   dataset_name: adt
   use_cache: True
   motion_dir: ./dataset/ADT/new_joint_vecs
-  mean: ./dataset/humanml/HumanML3D/Mean.npy # ./pretrain/nymeria/Mean.npy # ./dataset/HumanML3D/Mean.npy
-  std: ./dataset/humanml/HumanML3D/Std.npy # ./pretrain/nymeria/Std.npy # ./dataset/HumanML3D/Std.npy
+  text_dir: ./dataset/ADT/texts
+  mean: ./dataset/humanml/HumanML3D/Mean.npy
+  std: ./dataset/humanml/HumanML3D/Std.npy
+  # mean: ./pretrain/nymeria/Mean.npy
+  # std: ./pretrain/nymeria/Std.npy
   # mean_for_eval: ./dataset/t2m_mean.npy
   # std_for_eval: ./dataset/t2m_std.npy
