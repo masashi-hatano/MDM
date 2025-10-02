@@ -204,7 +204,7 @@ class MDMTrainer(pl.LightningModule):
 
                 # Save motion
                 save_path = Path(
-                    self.root, "predictions", "humanml_trans_dec_512_bert_50steps_600K_with_text", f"{key}.npy"
+                    self.root, "predictions", "post-train", "nymeria_mogaze_joints_ca_text_250K", f"{key}.npy"
                 )
                 save_path.parent.mkdir(parents=True, exist_ok=True)
                 np.save(save_path, motion_trimmed_denorm)
@@ -302,10 +302,10 @@ class MDMTrainer(pl.LightningModule):
 
         for i in range(b):
             joints_gt = recover_from_ric(
-                torch.tensor(gt[i], dtype=torch.float32)
+                torch.tensor(gt[i], dtype=torch.float32),
             ).numpy()  # [n_frames, 22, 3]
             joints_pred = recover_from_ric(
-                torch.tensor(pred[i], dtype=torch.float32)
+                torch.tensor(pred[i], dtype=torch.float32), downsample_factor=1
             ).numpy()  # [n_frames, 22, 3]
 
             joints_gt_i = joints_gt[: lengths[i]]

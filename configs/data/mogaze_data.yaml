@@ -15,8 +15,8 @@ dataset:
   use_cache: True
   motion_dir: ./dataset/MoGaze/new_joint_vecs
   text_dir: ./dataset/MoGaze/texts
-  mean: ./dataset/humanml/HumanML3D/Mean.npy 
-  std: ./dataset/humanml/HumanML3D/Std.npy 
+  mean: ./dataset/humanml/HumanML3D/Mean.npy
+  std: ./dataset/humanml/HumanML3D/Std.npy
   # mean: ./pretrain/nymeria/Mean.npy
   # std: ./pretrain/nymeria/Std.npy
   # mean_for_eval: ./dataset/t2m_mean.npy

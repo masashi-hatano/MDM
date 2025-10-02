@@ -14,7 +14,8 @@ import numpy as np
 import torch as th
 
 from diffusion.utils.loss_util import masked_l2
-from diffusion.utils.losses import discretized_gaussian_log_likelihood, normal_kl
+from diffusion.utils.losses import (discretized_gaussian_log_likelihood,
+                                    normal_kl)
 from diffusion.utils.nn import mean_flat
 
 
@@ -1107,7 +1108,16 @@ class GaussianDiffusion:
 
             terms["mse"] = self.masked_l2(target, model_output, mask)  # mean_flat(mse)
 
-            terms["loss"] = terms["mse"] + terms.get("vb", 0.0)
+            length = cond['y']['lengths']
+            mask_start = th.zeros_like(mask, device=mask.device)
+            mask_start[:, :, :, 0] = 1
+            mask_end = th.zeros_like(mask, device=mask.device)
+            mask_end[th.arange(mask.shape[0]), :, :, length-1] = 1
+
+            terms["3d_joint_start"] = self.masked_l2(target[:, :, 0:1], model_output[:, :, 0:1], mask_start)
+            terms["3d_joint_goal"] = self.masked_l2(target[th.arange(target.shape[0]), :, :, length-1].unsqueeze(-1), model_output[th.arange(target.shape[0]), :, :, length-1].unsqueeze(-1), mask_end)
+            
+            terms["loss"] = terms["mse"] + terms.get("vb", 0.0) + terms["3d_joint_start"] + terms["3d_joint_goal"]
 
         else:
             raise NotImplementedError(self.loss_type)

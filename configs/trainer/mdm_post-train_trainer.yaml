@@ -46,4 +46,4 @@ use_ema: True
 avg_model_beta: 0.9999
 gen_guidance_param: 2.5
 schedule_sampler_type: uniform
-ckpt_path: ./pretrain/nymeria/model000800000.pt # /home/mahatano/workspace/mdm/output/lr=1e-4_cross-attention_latest_nymeria_pretrain/checkpoints/model_step=000300000.ckpt # ./pretrain/nymeria/model000800000.pt
+ckpt_path: ./output/nymeria_trans_dec_512_bert_50steps_start+goal_joints_ca_text_MoGaze/checkpoints/model_step=000250000.ckpt # ./pretrain/nymeria/model000800000.pt

@@ -11,11 +11,11 @@ from datamodules.utils.quaternion import qinv, qrot, quaternion_to_cont6d
 # rot_data (B, seq_len, (joint_num - 1)*6)
 # local_velocity (B, seq_len, joint_num*3)
 # foot contact (B, seq_len, 4)
-def recover_root_rot_pos(data):
+def recover_root_rot_pos(data, downsample_factor=1):
     rot_vel = data[..., 0]
     r_rot_ang = torch.zeros_like(rot_vel).to(data.device)
     """Get Y-axis rotation from rotation velocity"""
-    r_rot_ang[..., 1:] = rot_vel[..., :-1]
+    r_rot_ang[..., 1:] = rot_vel[..., :-1] * downsample_factor
     r_rot_ang = torch.cumsum(r_rot_ang, dim=-1)
 
     r_rot_quat = torch.zeros(data.shape[:-1] + (4,)).to(data.device)
@@ -23,7 +23,7 @@ def recover_root_rot_pos(data):
     r_rot_quat[..., 2] = torch.sin(r_rot_ang)
 
     r_pos = torch.zeros(data.shape[:-1] + (3,)).to(data.device)
-    r_pos[..., 1:, [0, 2]] = data[..., :-1, 1:3]
+    r_pos[..., 1:, [0, 2]] = data[..., :-1, 1:3] * downsample_factor
     """Add Y-axis rotation to root position"""
     r_pos = qrot(qinv(r_rot_quat), r_pos)
 
@@ -50,8 +50,8 @@ def recover_from_rot(data, joints_num, skeleton):
     return positions
 
 
-def recover_from_ric(data, joints_num=22):
-    r_rot_quat, r_pos = recover_root_rot_pos(data)
+def recover_from_ric(data, joints_num=22, downsample_factor=1):
+    r_rot_quat, r_pos = recover_root_rot_pos(data, downsample_factor)
     positions = data[..., 4 : (joints_num - 1) * 3 + 4]
     positions = positions.view(positions.shape[:-1] + (-1, 3))
 

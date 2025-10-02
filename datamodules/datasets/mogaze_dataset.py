@@ -7,6 +7,8 @@ import torch
 from hydra.utils import get_original_cwd
 from tqdm import tqdm
 
+from datamodules.utils.recover import recover_from_ric
+
 
 class MoGazeDataset(torch.utils.data.Dataset):
     def __init__(
@@ -169,6 +171,10 @@ class MoGazeDataset(torch.utils.data.Dataset):
         if self.disable_offset_aug:
             idx = random.randint(0, self.unit_len)
         motion = motion[idx : idx + m_length]
+        
+        joints = recover_from_ric(
+            torch.tensor(motion, dtype=torch.float32),
+        ).numpy().reshape(-1, 22 * 3)
 
         "Z Normalization"
         motion = (motion - self.mean) / self.std
@@ -193,4 +199,5 @@ class MoGazeDataset(torch.utils.data.Dataset):
             length,
             None,  # tokens
             key,  # name
+            joints
         )

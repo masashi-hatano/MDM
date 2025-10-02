@@ -1,6 +1,6 @@
 hydra:
   run:
-    dir: ./output/nymeria_trans_dec_512_bert_50steps_start+goal_ca_text_MoGaze
+    dir: ./output/generation # nymeria_trans_dec_512_bert_50steps_start+goal_joints_ca_text_ADT_loss_start_goal
 
 defaults:
   - _self_

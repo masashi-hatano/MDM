@@ -94,7 +94,7 @@ class MDM(nn.Module):
                 print("EMBED START and GOAL")
                 self.embed_start = nn.Linear(self.input_feats, self.latent_dim)
                 self.embed_goal = nn.Linear(self.input_feats, self.latent_dim)
-                self.embed_start_goal = nn.Linear(self.input_feats * 2, self.latent_dim)
+                self.embed_start_goal = nn.Linear(66 * 2, self.latent_dim)
 
             if self.emb_policy == "ca":
                 assert (
@@ -266,18 +266,18 @@ class MDM(nn.Module):
             emb = emb + self.mask_cond(action_emb, force_mask=force_mask)
 
         if "start" in self.cond_mode and "goal" in self.cond_mode:
-            start_emb = self.embed_start(y["start"]).unsqueeze(0)
-            goal_emb = self.embed_goal(y["goal"]).unsqueeze(0)
+            # start_emb = self.embed_start(y["start"]).unsqueeze(0)
+            # goal_emb = self.embed_goal(y["goal"]).unsqueeze(0)
             start_goal = torch.cat(
                 [y["start"], y["goal"]], dim=-1
             )  # [bs, input_feats*2]
             start_goal_emb = self.embed_start_goal(start_goal).unsqueeze(0)  # [1, bs, d]
 
-            if self.emb_policy == "add":
-                emb = emb + start_emb + goal_emb
+            # if self.emb_policy == "add":
+            #     emb = emb + start_emb + goal_emb
             # elif self.emb_policy == "cat":
             #     emb = torch.cat([time_emb, self.mask_cond(start_emb, force_mask=force_mask), self.mask_cond(goal_emb, force_mask=force_mask)], dim=0)
-            elif self.emb_policy == "ca":
+            if self.emb_policy == "ca":
                 memory = start_goal_emb
                 emb = emb + self.embed_ca(emb, memory)
 
